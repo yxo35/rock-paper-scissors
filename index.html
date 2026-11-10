@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>猜拳遊戲</title>
+
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest/dist/tf.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@teachablemachine/image@latest/dist/teachablemachine-image.min.js"></script>
+
+<style>
+body{
+    font-family: Arial, sans-serif;
+    text-align:center;
+    background:#f5f5f5;
+    margin:0;
+    padding:20px;
+}
+
+h1{
+    color:#333;
+}
+
+#webcam-container{
+    margin:20px auto;
+}
+
+canvas{
+    border-radius:10px;
+    border:3px solid #333;
+}
+
+#result{
+    font-size:28px;
+    margin-top:20px;
+    font-weight:bold;
+}
+
+#computer{
+    font-size:24px;
+    margin-top:10px;
+}
+
+#score{
+    font-size:22px;
+    margin-top:20px;
+}
+
+button{
+    padding:12px 25px;
+    font-size:18px;
+    border:none;
+    border-radius:10px;
+    background:#2196F3;
+    color:white;
+    cursor:pointer;
+}
+
+button:hover{
+    background:#1976D2;
+}
+</style>
+
+</head>
+<body>
+
+<h1>✌️ 猜拳遊戲 ✊</h1>
+
+<button onclick="init()">開始遊戲</button>
+
+<div id="webcam-container"></div>
+
+<div id="result">等待開始...</div>
+
+<div id="computer"></div>
+
+<div id="score">
+玩家：0 分 ｜ 電腦：0 分
+</div>
+
+<script>
+
+const URL = "https://teachablemachine.withgoogle.com/models/jm7M4frYa/";
+
+let model, webcam, maxPredictions;
+
+let playerScore = 0;
+let computerScore = 0;
+
+let lastPrediction = "";
+let cooldown = false;
+
+async function init() {
+
+    const modelURL = URL + "model.json";
+    const metadataURL = URL + "metadata.json";
+
+    model = await tmImage.load(modelURL, metadataURL);
+    maxPredictions = model.getTotalClasses();
+
+    webcam = new tmImage.Webcam(
+        300,
+        300,
+        true
+    );
+
+    await webcam.setup();
+    await webcam.play();
+
+    window.requestAnimationFrame(loop);
+
+    document.getElementById("webcam-container").innerHTML="";
+
+    document
+        .getElementById("webcam-container")
+        .appendChild(webcam.canvas);
+}
+
+async function loop() {
+    webcam.update();
+    await predict();
+
+    window.requestAnimationFrame(loop);
+}
+
+async function predict() {
+
+    if(cooldown) return;
+
+    const prediction = await model.predict(webcam.canvas);
+
+    let highest = prediction[0];
+
+    for(let i=1;i<prediction.length;i++){
+        if(prediction[i].probability > highest.probability){
+            highest = prediction[i];
+        }
+    }
+
+    if(highest.probability < 0.90){
+        return;
+    }
+
+    const playerChoice = highest.className;
+
+    if(playerChoice === "沒有"){
+        return;
+    }
+
+    if(playerChoice !== lastPrediction){
+
+        lastPrediction = playerChoice;
+
+        playGame(playerChoice);
+    }
+}
+
+function playGame(playerChoice){
+
+    cooldown = true;
+
+    const choices = ["剪刀","石頭","布"];
+
+    const computerChoice =
+        choices[Math.floor(Math.random()*3)];
+
+    let result = "";
+
+    if(playerChoice === computerChoice){
+
+        result = "平手 🤝";
+    }
+
+    else if(
+        (playerChoice === "剪刀" && computerChoice === "布") ||
+        (playerChoice === "石頭" && computerChoice === "剪刀") ||
+        (playerChoice === "布" && computerChoice === "石頭")
+    ){
+
+        result = "你贏了 🎉";
+        playerScore++;
+    }
+
+    else{
+
+        result = "你輸了 😭";
+        computerScore++;
+    }
+
+    document.getElementById("computer").innerHTML =
+        "電腦出：" + computerChoice;
+
+    document.getElementById("result").innerHTML =
+        "你出：" + playerChoice + "<br>" + result;
+
+    document.getElementById("score").innerHTML =
+        `玩家：${playerScore} 分 ｜ 電腦：${computerScore} 分`;
+
+    setTimeout(()=>{
+        cooldown = false;
+    },2000);
+}
+
+</script>
+
+</body>
+</html>
